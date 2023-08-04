@@ -17,6 +17,13 @@ enum OrderSide {
   SELL
 }
 
+enum OrderStatus {
+  ACTIVE
+  PARTIALLY_FILLED
+  FILLED
+}
+
+
 model Order {
   id             String    @id @default(uuid())
   creatorAddress String
@@ -31,7 +38,12 @@ model Order {
   orderType      OrderType @default(LIMIT) // тип ордера: 'LIMIT' или 'MARKET'
   orderSide      OrderSide // сторона ордера: 'BUY' или 'SELL'
   filled         Decimal   @default(0) // количество смэтченных токенов
+  orderStatus    OrderStatus // статус ордера: 'ACTIVE', 'PARTIALLY_FILLED' или 'FILLED'
+  executionPrice Decimal?  // цена исполнения (только для лимитных ордеров)
+  fee            Decimal?  // размер комиссии
+  cancelable     Boolean?  // возможность отмены
 
   @@index([tokenA, tokenB, creatorAddress], name: "order_search_index")
 }
+
 
