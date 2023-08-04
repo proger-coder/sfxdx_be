@@ -29,7 +29,7 @@ export class AppController {
     @Query('amountA') amountA?: string,
     @Query('amountB') amountB?: string,
     @Query('isMarket') isMarket?: boolean,
-  ): string {
+  ): Promise<Prisma.OrderUncheckedCreateInput[]> {
     console.log(tokenA, tokenB, amountA, amountB);
     return this.appService.getMatchingOrders({
       tokenA,

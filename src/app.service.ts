@@ -28,7 +28,42 @@ export class AppService {
     return orders;
   }
 
-  getMatchingOrders({ tokenA, tokenB, amountA, amountB, isMarket }): string {
-    return `${tokenA} ${tokenB} ${amountA} ${amountB} ${isMarket}`;
+  async getMatchingOrders({
+    tokenA,
+    tokenB,
+    amountA,
+    amountB,
+    isMarket,
+  }: {
+    tokenA: string;
+    tokenB: string;
+    amountA: string;
+    amountB: string;
+    isMarket: boolean;
+  }): Promise<Prisma.OrderUncheckedCreateInput[]> {
+    let findParameters;
+
+    // Если amountA равен 0, то заявка будет исполнена по рынку, независимо от флага isMarket.
+    if (isMarket || amountA === '0') {
+      findParameters = {
+        tokenA: { equals: tokenA },
+        tokenB: { equals: tokenB },
+        isActive: { equals: true },
+        amountA: { lte: amountA },
+        amountB: { gte: amountB },
+      };
+    } else {
+      findParameters = {
+        tokenA: { equals: tokenA },
+        tokenB: { equals: tokenB },
+        isActive: { equals: true },
+        amountA: { equals: amountA },
+        amountB: { equals: amountB },
+      };
+    }
+
+    return this.prisma.order.findMany({
+      where: findParameters,
+    });
   }
 }
