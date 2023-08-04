@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'nestjs-prisma';
 import { Prisma } from '@prisma/client';
+import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
+import { GetOrdersDto } from './DTO/GetOrdersDTO';
 
 @Injectable()
 export class AppService {
@@ -10,41 +12,25 @@ export class AppService {
     return 'Главная страница!';
   }
 
-  async getOrders(params: {
-    tokenA?: string;
-    tokenB?: string;
-    user?: string;
-    active?: boolean;
-  }): Promise<Prisma.OrderUncheckedCreateInput[]> {
-    // Создайте объект, который будет содержать условия для выборки данных из базы
+  async getOrders(dto: GetOrdersDto): Promise<Prisma.OrderCreateInput[]> {
+    // Объект условий для выборки данных из базы
     const where: Prisma.OrderWhereInput = {};
-    if (params.tokenA) where.tokenA = params.tokenA;
-    if (params.tokenB) where.tokenB = params.tokenB;
-    if (params.user) where.creatorAddress = params.user;
-    if (typeof params.active !== 'undefined') where.isActive = params.active;
+    if (dto.tokenA) where.tokenA = dto.tokenA;
+    if (dto.tokenB) where.tokenB = dto.tokenB;
+    if (dto.user) where.creatorAddress = dto.user;
+    if (typeof dto.active !== 'undefined') where.isActive = dto.active;
 
-    // Выполните запрос к базе данных
+    // Запрос к БД
     const orders = await this.prisma.order.findMany({ where });
     return orders;
   }
 
-  async getMatchingOrders({
-    tokenA,
-    tokenB,
-    amountA,
-    amountB,
-    isMarket = false,
-  }: {
-    tokenA: string;
-    tokenB: string;
-    amountA: string;
-    amountB: string;
-    isMarket: boolean;
-  }): Promise<string[]> {
+  async getMatchingOrders(dto: GetMatchingOrdersDto): Promise<string[]> {
+    const { tokenA, tokenB, amountA, amountB, isMarket } = dto;
+
     const baseParameters = {
       tokenA: { equals: tokenA },
       tokenB: { equals: tokenB },
-      isActive: { equals: true },
     };
 
     let amountParameters;
@@ -63,6 +49,7 @@ export class AppService {
 
     const findParameters = { ...baseParameters, ...amountParameters };
 
+    // Запрос к БД
     return this.prisma.order.findMany({
         where: findParameters,
         select: {
