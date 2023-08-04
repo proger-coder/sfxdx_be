@@ -7,7 +7,7 @@ export class AppService {
   constructor(private prisma: PrismaService) {}
 
   getMain(): string {
-    return 'Main page!';
+    return 'Главная страница!';
   }
 
   async getOrders(params: {
@@ -21,7 +21,7 @@ export class AppService {
     if (params.tokenA) where.tokenA = params.tokenA;
     if (params.tokenB) where.tokenB = params.tokenB;
     if (params.user) where.creatorAddress = params.user;
-    if (params.active !== undefined) where.isActive = !!params.active;
+    if (typeof params.active !== 'undefined') where.isActive = params.active;
 
     // Выполните запрос к базе данных
     const orders = await this.prisma.order.findMany({ where });
@@ -33,37 +33,42 @@ export class AppService {
     tokenB,
     amountA,
     amountB,
-    isMarket,
+    isMarket = false,
   }: {
     tokenA: string;
     tokenB: string;
     amountA: string;
     amountB: string;
     isMarket: boolean;
-  }): Promise<Prisma.OrderUncheckedCreateInput[]> {
-    let findParameters;
+  }): Promise<string[]> {
+    const baseParameters = {
+      tokenA: { equals: tokenA },
+      tokenB: { equals: tokenB },
+      isActive: { equals: true },
+    };
 
-    // Если amountA равен 0, то заявка будет исполнена по рынку, независимо от флага isMarket.
+    let amountParameters;
+
     if (isMarket || amountA === '0') {
-      findParameters = {
-        tokenA: { equals: tokenA },
-        tokenB: { equals: tokenB },
-        isActive: { equals: true },
+      amountParameters = {
         amountA: { lte: amountA },
         amountB: { gte: amountB },
       };
     } else {
-      findParameters = {
-        tokenA: { equals: tokenA },
-        tokenB: { equals: tokenB },
-        isActive: { equals: true },
+      amountParameters = {
         amountA: { equals: amountA },
         amountB: { equals: amountB },
       };
     }
 
+    const findParameters = { ...baseParameters, ...amountParameters };
+
     return this.prisma.order.findMany({
-      where: findParameters,
-    });
+        where: findParameters,
+        select: {
+          id: true,
+        },
+      })
+      .then((orders) => orders.map((order) => order.id));
   }
 }
