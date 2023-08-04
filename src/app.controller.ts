@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
+import { Prisma } from '@prisma/client';
 
 @Controller()
 export class AppController {
@@ -9,13 +10,14 @@ export class AppController {
   getMain(): string {
     return this.appService.getMain();
   }
+
   @Get('getOrders')
   getOrders(
     @Query('tokenA') tokenA?: string,
     @Query('tokenB') tokenB?: string,
     @Query('user') user?: string,
-    @Query('active') active = false,
-  ): string {
+    @Query('active') active?: boolean,
+  ): Promise<Prisma.OrderUncheckedCreateInput[]> {
     console.log(tokenA, tokenB, user, active);
     return this.appService.getOrders({ tokenA, tokenB, user, active });
   }
