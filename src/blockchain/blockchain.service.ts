@@ -13,7 +13,7 @@ export class BlockchainService {
   private readonly contract: any;
 
   constructor(private prisma: PrismaService) {
-    this.web3 = new Web3(INFURA_WSS);
+    this.web3 = new Web3(new Web3.providers.WebsocketProvider(INFURA_WSS));
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
@@ -27,10 +27,7 @@ export class BlockchainService {
   async init() {
     await this.setAccount(privateKey);
     console.log('account set');
-    this.subscribe();
-  }
 
-  subscribe() {
     this.web3.provider.on('connect', () => {
       console.log('connect');
     });
