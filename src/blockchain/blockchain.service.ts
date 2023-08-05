@@ -42,34 +42,7 @@ export class BlockchainService {
     this.web3.provider.on('chainChanged', () => {
       console.log('chainChanged');
     });
-
-    this.contract.events.OrderCreated({}, (error, event) => {
-      if (error) {
-        console.error("An error occurred when handling the OrderCreated event");
-        console.error(error);
-      } else {
-        console.log("OrderCreated event received, event data: ", event);
-      }
-    });
-
-    this.contract.getPastEvents(
-      'OrderCreated',
-      {
-        fromBlock: 0,
-        toBlock: 'latest',
-      },
-      (error, events) => {
-        if (error) {
-          console.error("An error occurred when fetching past events");
-          console.error(error);
-        } else {
-          console.log("Past events fetched, events data: ", events);
-        }
-      },
-    );
   }
-
-
 
   /** создание заявки */
   async createOrder(
