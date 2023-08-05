@@ -3,7 +3,7 @@ import Web3 from 'web3';
 import ContractABI from '../../ContractABI.json';
 import { PrismaService } from 'nestjs-prisma';
 
-const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY || '';
+const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const INFURA_WSS = process.env.GOERLI_INFURA_WSS;
 
@@ -17,21 +17,22 @@ export class BlockchainService {
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
+  // Подключаемся к аккаунту
+  async setAccount(privateKey: string) {
+    const account = this.web3.eth.accounts.privateKeyToAccount(privateKey);
+    this.web3.eth.accounts.wallet.add(account);
+    this.web3.eth.defaultAccount = account.address;
+  }
+
   async init() {
     await this.setAccount(privateKey);
     console.log('account set');
-
-    // Обработка событий
     this.subscribe();
   }
 
   subscribe() {
     this.web3.provider.on('connect', () => {
       console.log('connect');
-    });
-
-    this.web3.provider.on('disconnect', () => {
-      console.log('disconnect');
     });
 
     this.web3.provider.on('accountsChanged', () => {
@@ -50,14 +51,25 @@ export class BlockchainService {
         console.log("OrderCreated event received, event data: ", event);
       }
     });
+
+    this.contract.getPastEvents(
+      'OrderCreated',
+      {
+        fromBlock: 0,
+        toBlock: 'latest',
+      },
+      (error, events) => {
+        if (error) {
+          console.error("An error occurred when fetching past events");
+          console.error(error);
+        } else {
+          console.log("Past events fetched, events data: ", events);
+        }
+      },
+    );
   }
 
-  // Подключаемся к аккаунту
-  async setAccount(privateKey: string) {
-    const account = this.web3.eth.accounts.privateKeyToAccount(privateKey);
-    this.web3.eth.accounts.wallet.add(account);
-    this.web3.eth.defaultAccount = account.address;
-  }
+
 
   /** создание заявки */
   async createOrder(
