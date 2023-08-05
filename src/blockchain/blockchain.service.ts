@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import Web3 from 'web3';
+//import WebsocketProvider = Web3.providers.WebsocketProvider;
 import ContractABI from '../../ContractABI.json';
+
 import { PrismaService } from 'nestjs-prisma';
 
 const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY || '';
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const INFURA_URL = process.env.GOERLI_INFURA_URL;
+const INFURA_LINK = process.env.GOERLI_INFURA_WSS;
+
+const provider: any = new Web3.providers.WebsocketProvider(INFURA_LINK);;
 
 @Injectable()
 export class BlockchainService {
@@ -13,44 +17,40 @@ export class BlockchainService {
   private contract: any;
 
   constructor(private prisma: PrismaService) {
-    this.web3 = new Web3(INFURA_URL);
+    // this.web3 = new Web3(INFURA_LINK);
+    this.web3 = new Web3(provider as any);
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
   async init() {
     await this.setAccount(privateKey);
+    console.log('account set');
 
-    this.contract.on('OrderCreated', async (order) => {
-      console.log('OrderCreated', order);
-      // Создать новый заказ в базе данных
-      // await this.prisma.order.create({
-      //   data: {
-      //     // Заполните данные заказа на основе полученного объекта order
-      //   },
-      // });
+    provider.on('error', (e) => {
+      console.error('WS Error', e);
     });
 
-    this.contract.on('OrderMatched', async (orderId, event) => {
-      console.log('OrderMatched', orderId);
-      // Найти заказ в базе данных и обновить его
-      // await this.prisma.order.update({
-      //   where: { id: orderId },
-      //   data: {
-      //     // Обновить данные заказа на основе полученного объекта event
-      //   },
-      // });
+    provider.on('end', (e) => {
+      console.error('WS End', e);
     });
 
-    this.contract.on('OrderCancelled', async (orderId) => {
-      console.log('OrderCancelled', orderId);
-      // Найти заказ в базе данных и обновить его
-      // await this.prisma.order.update({
-      //   where: { id: orderId },
-      //   data: {
-      //     // Обновить данные заказа на основе полученного объекта event
-      //   },
-      // });
-    });
+    // this.contract.events
+    //   .OrderCreated({
+    //     fromBlock: 'latest',
+    //   })
+    //   .on('data', async (event) => {
+    //     console.log('OrderCreated !! ', event.returnValues);
+    //   })
+    //   .on('error', console.error);
+    //
+    // this.contract.events
+    //   .OrderMatched({
+    //     fromBlock: 'latest',
+    //   })
+    //   .on('data', async (event) => {
+    //     console.log('OrderMatched', event.returnValues);
+    //   })
+    //   .on('error', console.error);
   }
 
   // Подключаемся к аккаунту
@@ -60,6 +60,7 @@ export class BlockchainService {
     this.web3.eth.defaultAccount = account.address;
   }
 
+  /** создание заявки */
   async createOrder(
     tokenA: string,
     tokenB: string,
@@ -93,7 +94,7 @@ export class BlockchainService {
     const receipt = await this.web3.eth.sendSignedTransaction(
       signedTransaction.rawTransaction,
     );
-    console.log(receipt);
+    console.log('receipt blockHash = ', receipt?.blockHash);
     // Преобразование 'BigInt' в 'string'
     return JSON.parse(
       JSON.stringify(receipt, (_, v) =>
