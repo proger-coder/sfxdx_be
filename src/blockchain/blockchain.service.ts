@@ -1,24 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import Web3 from 'web3';
-//import WebsocketProvider = Web3.providers.WebsocketProvider;
 import ContractABI from '../../ContractABI.json';
-
 import { PrismaService } from 'nestjs-prisma';
 
 const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY || '';
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const INFURA_LINK = process.env.GOERLI_INFURA_WSS;
-
-const provider: any = new Web3.providers.WebsocketProvider(INFURA_LINK);;
+const INFURA_WSS = process.env.GOERLI_INFURA_WSS;
 
 @Injectable()
 export class BlockchainService {
   private web3: Web3;
-  private contract: any;
+  private readonly contract: any;
 
   constructor(private prisma: PrismaService) {
-    // this.web3 = new Web3(INFURA_LINK);
-    this.web3 = new Web3(provider as any);
+    this.web3 = new Web3(INFURA_WSS);
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
@@ -26,31 +21,35 @@ export class BlockchainService {
     await this.setAccount(privateKey);
     console.log('account set');
 
-    provider.on('error', (e) => {
-      console.error('WS Error', e);
+    // Обработка событий
+    this.subscribe();
+  }
+
+  subscribe() {
+    this.web3.provider.on('connect', () => {
+      console.log('connect');
     });
 
-    provider.on('end', (e) => {
-      console.error('WS End', e);
+    this.web3.provider.on('disconnect', () => {
+      console.log('disconnect');
     });
 
-    // this.contract.events
-    //   .OrderCreated({
-    //     fromBlock: 'latest',
-    //   })
-    //   .on('data', async (event) => {
-    //     console.log('OrderCreated !! ', event.returnValues);
-    //   })
-    //   .on('error', console.error);
-    //
-    // this.contract.events
-    //   .OrderMatched({
-    //     fromBlock: 'latest',
-    //   })
-    //   .on('data', async (event) => {
-    //     console.log('OrderMatched', event.returnValues);
-    //   })
-    //   .on('error', console.error);
+    this.web3.provider.on('accountsChanged', () => {
+      console.log('accountsChanged');
+    });
+
+    this.web3.provider.on('chainChanged', () => {
+      console.log('chainChanged');
+    });
+
+    this.contract.events.OrderCreated({}, (error, event) => {
+      if (error) {
+        console.error("An error occurred when handling the OrderCreated event");
+        console.error(error);
+      } else {
+        console.log("OrderCreated event received, event data: ", event);
+      }
+    });
   }
 
   // Подключаемся к аккаунту
