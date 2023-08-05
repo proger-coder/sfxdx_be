@@ -1,12 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from 'nestjs-prisma';
 import { Prisma } from '@prisma/client';
 import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
 import { GetOrdersDto } from './DTO/GetOrdersDTO';
+import { BlockchainService } from './blockchain/blockchain.service';
 
 @Injectable()
-export class AppService {
-  constructor(private prisma: PrismaService) {}
+export class AppService implements OnModuleInit {
+  constructor(
+    private prisma: PrismaService,
+    private blockchainService: BlockchainService,
+  ) {}
+
+  async onModuleInit() {
+    await this.blockchainService.init();
+  }
 
   getMain(): string {
     return 'Главная страница!';

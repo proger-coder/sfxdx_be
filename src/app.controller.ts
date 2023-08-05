@@ -1,12 +1,16 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Prisma } from '@prisma/client';
 import { GetOrdersDto } from './DTO/GetOrdersDTO';
 import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
+import { BlockchainService } from './blockchain/blockchain.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly blockchainService: BlockchainService
+  ) {}
 
   @Get()
   getMain(): string {
@@ -54,5 +58,22 @@ export class AppController {
   ): Promise<string[]> {
     console.log(getMatchingOrdersDto);
     return this.appService.getMatchingOrders(getMatchingOrdersDto);
+  }
+
+  @Post('createOrder')
+  async createOrder() {
+    // замените эти значения на реальные
+    const tokenA = '0x352F8C1f8576183b6c783D3e589aBB69FfBeBc47';
+    const tokenB = '0x9d2d94cDD59cb1b7c2bf4b9E9863fc9767d19B58'; //Token2 (TKN2)
+    const amountA = 1;
+    const amountB = 1;
+
+    const result = await this.blockchainService.createOrder(
+      tokenA,
+      tokenB,
+      amountA,
+      amountB,
+    );
+    return result;
   }
 }
