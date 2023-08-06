@@ -91,4 +91,11 @@ export class AppController {
     );
     return result;
   }
+
+  @Post('cancelOrder')
+  async cancelOrder(@Body() body) {
+    const { id } = body;
+    const result = await this.blockchainService.cancelOrder(id);
+    return result;
+  }
 }

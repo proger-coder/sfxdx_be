@@ -31,7 +31,7 @@ model Order {
   tokenB           String
   amountA          String
   amountB          String
-  amountLeftToFill Decimal    @default(0) // В зависимости от логики, возможно стоит использовать значение amountA или amountB
+  amountLeftToFill String     @default("0")
   isActive         Boolean    @default(true)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime?  @updatedAt

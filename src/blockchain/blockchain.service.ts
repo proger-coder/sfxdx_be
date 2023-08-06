@@ -41,18 +41,16 @@ export class BlockchainService {
     // console.log(eventSubscription); // выводится
     // console.log(eventSubscription instanceof EventEmitter) // falles
     // console.log(Object.getOwnPropertyNames(eventSubscription));
-    const orderCreated = this.contract.events.OrderCreated({ fromBlock: 'latest' });
-    const orderMatched = this.contract.events.OrderMatched({ fromBlock: 'latest' });
-    const orderCancelled = this.contract.events.OrderCancelled({ fromBlock: 'latest' });
+    const orderCreated = this.contract.events.OrderCreated({ fromBlock: 'latest' })._emitter;
+    const orderMatched = this.contract.events.OrderMatched({ fromBlock: 'latest' })._emitter;
+    const orderCancelled = this.contract.events.OrderCancelled({ fromBlock: 'latest' })._emitter;
 
     // Подписка на событие OrderCreated
-    orderCreated._emitter.on('data', async (event) => {
+    orderCreated.on('data', async (event) => {
         const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
-
         console.log('Order Created event: \n', event, 'id=', id);
 
       try {
-
         const orderData = {
           id: `${id}`,
           creatorAddress: user,
@@ -67,7 +65,6 @@ export class BlockchainService {
         const createdOrder = await this.prisma.order.create({
           data: orderData,
         });
-
         console.log('Order saved to database:', createdOrder);
       } catch (error) {
           console.error('Error saving order to database:', error);
@@ -76,19 +73,24 @@ export class BlockchainService {
       .on('error', console.error);
 
     // Подписка на событие OrderMatched
-    this.contract.events
-      .OrderMatched({ fromBlock: 'latest' })
-      ._emitter.on('data', (event) =>
-        console.log('Order Matched event: \n', event),
-      )
+    orderMatched.on('data', async (event) => {
+      const { id } = event.returnValues;
+      console.log('Order Matched event: \n', event);
+    })
       .on('error', console.error);
 
     // Подписка на событие OrderCancelled
-    this.contract.events
-      .OrderCancelled({ fromBlock: 'latest' })
-      ._emitter.on('data', (event) =>
-        console.log('Order Cancelled event: \n', event),
-      )
+    orderCancelled.on('data', async (event) => {
+      //const { id } = event.returnValues;
+      const id = event.returnValues.id.toString();
+      console.log('Order Cancelled event: \n', event)
+      try {
+        const filledOrder = await this.prisma.order.update({ where: { id }, data: { orderStatus: "FILLED" } });
+        console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
+      } catch (e) {
+        console.log(`Error trying update order status where id = ${id}`, e)
+      }
+    })
       .on('error', console.error);
   }
 
@@ -142,11 +144,14 @@ export class BlockchainService {
       from: this.web3.eth.defaultAccount,
     });
     const data = cancelOrder.encodeABI();
+    const gasHex = this.web3.utils.toHex(gas);
+    const gasPrice = await this.web3.eth.getGasPrice();
     const tx = {
       from: this.web3.eth.defaultAccount,
       to: CONTRACT_ADDRESS,
       data,
-      gas,
+      gas: gasHex,
+      gasPrice,
     };
 
     const signedTransaction = await this.web3.eth.accounts.signTransaction(
