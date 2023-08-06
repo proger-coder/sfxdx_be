@@ -21,6 +21,15 @@ export class BlockchainService {
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
+  // Преобразование 'BigInt' в 'string'
+  jsonify(receipt){
+    return JSON.parse(
+      JSON.stringify(receipt, (_, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
+      ),
+    );
+  }
+
   // Подключаемся к аккаунту
   async setAccount(privateKey: string) {
     const account = this.web3.eth.accounts.privateKeyToAccount(privateKey);
@@ -89,25 +98,33 @@ export class BlockchainService {
       .on('error', console.error);
   }
 
-  /** Создание заявки в контракте */
-  async createOrder(
-    tokenA: string,
-    tokenB: string,
-    amountA: number,
-    amountB: number,
-  ) {
-    const createOrder = this.contract.methods.createOrder(
-      tokenA,
-      tokenB,
-      amountA,
-      amountB,
-    );
-    const gas = await createOrder.estimateGas({
+  /**
+   * Обобщённая функция контракта
+   * Выполняет переданный метод смарт-контракта.
+   *
+   * @param {string} methodFunction - Название метода контракта для выполнения.
+   * @param {...any} args - Аргументы, которые должны быть переданы методу контракта.
+   * @returns {Promise<string>} - Возвращает обработанный ответ от транзакции в формате строки.
+   */
+  private async executeContractMethod(methodFunction, ...args) {
+    // Создаём экземпляр функции смарт-контракта с переданными аргументами.
+    const contractFunction = this.contract.methods[methodFunction](...args);
+
+    // Оцениваем необходимое количество газа для выполнения транзакции.
+    const gas = await contractFunction.estimateGas({
       from: this.web3.eth.defaultAccount,
     });
-    const data = createOrder.encodeABI();
+
+    // Кодируем ABI функции для последующей передачи его в транзакцию.
+    const data = contractFunction.encodeABI();
+
+    // Конвертируем оценочное значение газа в формат "hex".
     const gasHex = this.web3.utils.toHex(gas);
+
+    // Получаем текущую цену газа на рынке.
     const gasPrice = await this.web3.eth.getGasPrice();
+
+    // Формируем объект транзакции с необходимыми параметрами.
     const tx = {
       from: this.web3.eth.defaultAccount,
       to: CONTRACT_ADDRESS,
@@ -116,112 +133,37 @@ export class BlockchainService {
       gasPrice,
     };
 
+    // Подписываем созданную транзакцию с помощью приватного ключа.
     const signedTransaction = await this.web3.eth.accounts.signTransaction(
       tx,
       privateKey,
     );
+
+    // Отправляем подписанную транзакцию в сеть.
     const receipt = await this.web3.eth.sendSignedTransaction(
       signedTransaction.rawTransaction,
     );
 
+    // Выводим хэш блока, в котором была включена транзакция.
     console.log('receipt blockHash = ', receipt?.blockHash);
-    // Преобразование 'BigInt' в 'string'
-    return JSON.parse(
-      JSON.stringify(receipt, (_, v) =>
-        typeof v === 'bigint' ? v.toString() : v,
-      ),
-    );
+
+    // Возвращаем результат выполнения транзакции в формате строки (преобразуя из 'BigInt', если это необходимо).
+    return this.jsonify(receipt);
+  }
+
+  /** Создание заявки в контракте */
+  async createOrder(tokenA: string, tokenB: string, amountA: number, amountB: number) {
+    return await this.executeContractMethod('createOrder', tokenA, tokenB, amountA, amountB);
   }
 
   /** Отмена заявки в контракте */
   async cancelOrder(orderId: string) {
-    const cancelOrder = this.contract.methods.cancelOrder(orderId);
-    const gas = await cancelOrder.estimateGas({
-      from: this.web3.eth.defaultAccount,
-    });
-    const data = cancelOrder.encodeABI();
-    const gasHex = this.web3.utils.toHex(gas);
-    const gasPrice = await this.web3.eth.getGasPrice();
-    const tx = {
-      from: this.web3.eth.defaultAccount,
-      to: CONTRACT_ADDRESS,
-      data,
-      gas: gasHex,
-      gasPrice,
-    };
-
-    const signedTransaction = await this.web3.eth.accounts.signTransaction(
-      tx,
-      privateKey,
-    );
-    const receipt = await this.web3.eth.sendSignedTransaction(
-      signedTransaction.rawTransaction,
-    );
-
-    console.log('receipt blockHash = ', receipt?.blockHash);
-    // Преобразование 'BigInt' в 'string'
-    return JSON.parse(
-      JSON.stringify(receipt, (_, v) =>
-        typeof v === 'bigint' ? v.toString() : v,
-      ),
-    );
+    return await this.executeContractMethod('cancelOrder', orderId);
   }
 
 
-  async matchOrders(
-    matchedOrderIds,
-    tokenA,
-    tokenB,
-    amountA,
-    amountB,
-    isMarket,
-  ) {
-    // Создаем экземпляр функции matchOrders из смарт-контракта
-    const matchOrdersFunction = this.contract.methods.matchOrders(
-      matchedOrderIds,
-      tokenA,
-      tokenB,
-      amountA,
-      amountB,
-      isMarket,
-    );
-
-    // Оценка газа, который потребуется для транзакции
-    const gas = await matchOrdersFunction.estimateGas({
-      from: this.web3.eth.defaultAccount,
-    });
-
-    // Кодировка ABI для передачи в транзакцию
-    const data = matchOrdersFunction.encodeABI();
-    const gasHex = this.web3.utils.toHex(gas);
-    const gasPrice = await this.web3.eth.getGasPrice();
-
-    // Создание объекта транзакции
-    const tx = {
-      from: this.web3.eth.defaultAccount,
-      to: CONTRACT_ADDRESS,
-      data,
-      gas: gasHex,
-      gasPrice,
-    };
-
-    // Подписание транзакции
-    const signedTransaction = await this.web3.eth.accounts.signTransaction(
-      tx,
-      privateKey,
-    );
-
-    // Отправка подписанной транзакции
-    const receipt = await this.web3.eth.sendSignedTransaction(
-      signedTransaction.rawTransaction,
-    );
-
-    console.log('receipt blockHash = ', receipt?.blockHash);
-    // Преобразование 'BigInt' в 'string'
-    return JSON.parse(
-      JSON.stringify(receipt, (_, v) =>
-        typeof v === 'bigint' ? v.toString() : v,
-      ),
-    );
+  async matchOrders(matchedOrderIds: string[], tokenA, tokenB, amountA, amountB, isMarket) {
+    return await this.executeContractMethod('matchOrders', matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket);
   }
+
 }
