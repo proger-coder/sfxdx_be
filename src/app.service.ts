@@ -17,7 +17,6 @@ export class AppService implements OnModuleInit {
   }
 
   async onApplicationBootstrap() {
-    await this.blockchainService.init();
   }
 
   getMain(): string {

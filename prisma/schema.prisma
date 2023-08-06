@@ -15,6 +15,7 @@ enum OrderType {
 enum OrderSide {
   BUY
   SELL
+  UNKNOWN
 }
 
 enum OrderStatus {
@@ -23,27 +24,24 @@ enum OrderStatus {
   FILLED
 }
 
-
 model Order {
-  id             String    @id @default(uuid())
-  creatorAddress String
-  tokenA         String
-  tokenB         String
-  amountA        Decimal
-  amountB        Decimal
-  amountLeftToFill Decimal
-  isActive       Boolean
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime? @updatedAt
-  orderType      OrderType @default(LIMIT) // тип ордера: 'LIMIT' или 'MARKET'
-  orderSide      OrderSide // сторона ордера: 'BUY' или 'SELL'
-  filled         Decimal   @default(0) // количество смэтченных токенов
-  orderStatus    OrderStatus // статус ордера: 'ACTIVE', 'PARTIALLY_FILLED' или 'FILLED'
-  executionPrice Decimal?  // цена исполнения (только для лимитных ордеров)
-  fee            Decimal?  // размер комиссии
-  cancelable     Boolean?  // возможность отмены
+  id               String     @id
+  creatorAddress   String
+  tokenA           String
+  tokenB           String
+  amountA          String
+  amountB          String
+  amountLeftToFill Decimal    @default(0) // В зависимости от логики, возможно стоит использовать значение amountA или amountB
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime?  @updatedAt
+  orderType        OrderType  @default(LIMIT)
+  orderSide        OrderSide  @default(UNKNOWN)
+  filled           Decimal    @default(0)
+  orderStatus      OrderStatus @default(ACTIVE)
+  executionPrice   Decimal?
+  fee              Decimal?
+  cancelable       Boolean?   @default(true)
 
   @@index([tokenA, tokenB, creatorAddress], name: "order_search_index")
 }
-
-

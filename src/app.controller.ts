@@ -77,4 +77,18 @@ export class AppController {
     );
     return result;
   }
+
+  @Post('matchOrders')
+  async matchOrders(@Body() matchOrders) {
+    const { matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket } = matchOrders;
+    const result = await this.blockchainService.matchOrders(
+      matchedOrderIds,
+      tokenA,
+      tokenB,
+      +amountA,
+      +amountB,
+      isMarket,
+    );
+    return result;
+  }
 }
