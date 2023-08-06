@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
-import { AppService } from "./app.service";
-import { Prisma } from "@prisma/client";
-import { GetOrdersDto } from "./DTO/GetOrdersDTO";
-import { GetMatchingOrdersDto } from "./DTO/GetMatchingOrdersDTO";
-import { BlockchainService } from "./blockchain/blockchain.service";
-import { CreateOrderDto } from "./DTO/CreateOrderDTO";
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { AppService } from './app.service';
+import { Prisma } from '@prisma/client';
+import { GetOrdersDto } from './DTO/GetOrdersDTO';
+import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
+import { BlockchainService } from './blockchain/blockchain.service';
+import { CreateOrderDto } from './DTO/CreateOrderDTO';
+import { MatchOrdersDto } from './DTO/MatchOrdersDTO';
 
 @Controller()
 export class AppController {
@@ -67,20 +68,19 @@ export class AppController {
   @Post('createOrder')
   async createOrder(@Body() createOrderDto: CreateOrderDto) {
     const { tokenA, tokenB, amountA, amountB } = createOrderDto;
-
-    const result = await this.blockchainService.createOrder(
+    return await this.blockchainService.createOrder(
       tokenA,
       tokenB,
       +amountA,
       +amountB,
     );
-    return result;
   }
 
   @Post('matchOrders')
-  async matchOrders(@Body() matchOrders) {
-    const { matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket } = matchOrders;
-    const result = await this.blockchainService.matchOrders(
+  async matchOrders(@Body() matchOrders: MatchOrdersDto) {
+    const { matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket } =
+      matchOrders;
+    return await this.blockchainService.matchOrders(
       matchedOrderIds,
       tokenA,
       tokenB,
@@ -88,13 +88,11 @@ export class AppController {
       +amountB,
       isMarket,
     );
-    return result;
   }
 
   @Post('cancelOrder')
   async cancelOrder(@Body() body) {
-    const { id } = body;
-    console.log(typeof id); //string
+    const { id } = body; //string
     return await this.blockchainService.cancelOrder(id);
   }
 }

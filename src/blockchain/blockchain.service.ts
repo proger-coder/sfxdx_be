@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import Web3 from 'web3';
 import ContractABI from '../../ContractABI.json';
 import { PrismaService } from 'nestjs-prisma';
-import { OrderType } from '@prisma/client';
+import { OrderType, OrderStatus } from '@prisma/client';
 
 const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
@@ -63,6 +63,7 @@ export class BlockchainService {
           amountA: `${amountA}`,
           amountB: `${amountB}`,
           orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
+          cancelable: !isMarket // возможность отмены - только для активных или частично заполненных лимитных ордеров
         };
 
         const createdOrder = await this.prisma.order.create({
@@ -81,7 +82,13 @@ export class BlockchainService {
       const id = event.returnValues.id.toString(); // т.к. bigint
       console.log('Order Cancelled event: \n', event)
       try {
-        const filledOrder = await this.prisma.order.update({ where: { id }, data: { orderStatus: "CANCELLED" } });
+        const filledOrder = await this.prisma.order.update({
+          where: { id },
+          data: {
+            orderStatus: "CANCELLED",
+            cancelable: false // отменённый ордер становится неотменяемым
+          }
+        });
         console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
       } catch (e) {
         console.log(`Error trying update order status where id = ${id} :`, e)
@@ -92,8 +99,28 @@ export class BlockchainService {
     /** Подписка на событие OrderMatched и ...*/
     // Если весь объем заявки был исполнен (то есть amount равен amountLeftToFill), заявка считается закрытой.
     orderMatched.on('data', async (event) => {
-      const { id } = event.returnValues;
+      const { id, amountLeftToFill } = event.returnValues;
       console.log('Order Matched event: \n', event);
+
+      let orderStatus: OrderStatus;
+      if (amountLeftToFill === '0') {  // Если ордер полностью исполнен
+        orderStatus = "FILLED";
+      } else {
+        orderStatus = "PARTIALLY_FILLED";
+      }
+
+      try {
+        const updatedOrder = await this.prisma.order.update({
+          where: { id },
+          data: {
+            orderStatus,
+            amountLeftToFill: amountLeftToFill
+          }
+        });
+        console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
+      } catch (e) {
+        console.log(`Error updating order status where id = ${id} :`, e);
+      }
     })
       .on('error', console.error);
   }
@@ -151,6 +178,11 @@ export class BlockchainService {
     return this.jsonify(receipt);
   }
 
+  /** сравнение заявок */
+  async matchOrders(matchedOrderIds: string[], tokenA, tokenB, amountA, amountB, isMarket) {
+    return await this.executeContractMethod('matchOrders', matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket);
+  }
+
   /** Создание заявки в контракте */
   async createOrder(tokenA: string, tokenB: string, amountA: number, amountB: number) {
     return await this.executeContractMethod('createOrder', tokenA, tokenB, amountA, amountB);
@@ -162,8 +194,6 @@ export class BlockchainService {
   }
 
 
-  async matchOrders(matchedOrderIds: string[], tokenA, tokenB, amountA, amountB, isMarket) {
-    return await this.executeContractMethod('matchOrders', matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket);
-  }
+
 
 }
