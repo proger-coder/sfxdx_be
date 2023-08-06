@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { AppService } from './app.service';
-import { Prisma } from '@prisma/client';
-import { GetOrdersDto } from './DTO/GetOrdersDTO';
-import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
-import { BlockchainService } from './blockchain/blockchain.service';
-import { CreateOrderDto } from './DTO/CreateOrderDTO';
+import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { AppService } from "./app.service";
+import { Prisma } from "@prisma/client";
+import { GetOrdersDto } from "./DTO/GetOrdersDTO";
+import { GetMatchingOrdersDto } from "./DTO/GetMatchingOrdersDTO";
+import { BlockchainService } from "./blockchain/blockchain.service";
+import { CreateOrderDto } from "./DTO/CreateOrderDTO";
 
 @Controller()
 export class AppController {
@@ -66,7 +66,6 @@ export class AppController {
    * */
   @Post('createOrder')
   async createOrder(@Body() createOrderDto: CreateOrderDto) {
-    //console.log(createOrderDto);
     const { tokenA, tokenB, amountA, amountB } = createOrderDto;
 
     const result = await this.blockchainService.createOrder(
@@ -95,7 +94,7 @@ export class AppController {
   @Post('cancelOrder')
   async cancelOrder(@Body() body) {
     const { id } = body;
-    const result = await this.blockchainService.cancelOrder(id);
-    return result;
+    console.log(typeof id); //string
+    return await this.blockchainService.cancelOrder(id);
   }
 }

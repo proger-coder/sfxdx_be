@@ -72,7 +72,7 @@ export class BlockchainService {
       const id = event.returnValues.id.toString(); // т.к. bigint
       console.log('Order Cancelled event: \n', event)
       try {
-        const filledOrder = await this.prisma.order.update({ where: { id }, data: { orderStatus: "FILLED" } });
+        const filledOrder = await this.prisma.order.update({ where: { id }, data: { orderStatus: "CANCELLED" } });
         console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
       } catch (e) {
         console.log(`Error trying update order status where id = ${id} :`, e)
@@ -134,7 +134,7 @@ export class BlockchainService {
   }
 
   /** Отмена заявки в контракте */
-  async cancelOrder(orderId: number) {
+  async cancelOrder(orderId: string) {
     const cancelOrder = this.contract.methods.cancelOrder(orderId);
     const gas = await cancelOrder.estimateGas({
       from: this.web3.eth.defaultAccount,
@@ -157,7 +157,14 @@ export class BlockchainService {
     const receipt = await this.web3.eth.sendSignedTransaction(
       signedTransaction.rawTransaction,
     );
-    return receipt;
+
+    console.log('receipt blockHash = ', receipt?.blockHash);
+    // Преобразование 'BigInt' в 'string'
+    return JSON.parse(
+      JSON.stringify(receipt, (_, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
+      ),
+    );
   }
 
 
