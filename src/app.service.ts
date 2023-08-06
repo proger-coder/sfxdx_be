@@ -51,6 +51,7 @@ export class AppService implements OnModuleInit {
     let amountParameters;
 
     if (isMarket || amountA === '0') {
+      // если 0 заявка исполнится по рынку
       amountParameters = {
         amountA: { lte: amountA },
         amountB: { gte: amountB },
@@ -62,7 +63,11 @@ export class AppService implements OnModuleInit {
       };
     }
 
-    const findParameters = { ...baseParameters, ...amountParameters };
+    const findParameters = {
+      ...baseParameters,
+      ...amountParameters,
+      orderStatus: { notIn: ['FILLED', 'CANCELLED'] }, // Исключаем неактивные ордера
+    };
 
     // Запрос к БД
     return this.prisma.order.findMany({

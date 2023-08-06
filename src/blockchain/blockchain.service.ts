@@ -202,8 +202,4 @@ export class BlockchainService {
   async cancelOrder(orderId: string) {
     return await this.executeContractMethod('cancelOrder', orderId);
   }
-
-
-
-
 }

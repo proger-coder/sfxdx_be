@@ -29,8 +29,8 @@ enum OrderStatus {
 model Order {
   id               String     @id
   creatorAddress   String
-  tokenA           String
-  tokenB           String
+  tokenA           String     // tokenA - адрес токена покупки
+  tokenB           String     // tokenB - адрес токена продажи
   amountA          String
   amountB          String
   amountLeftToFill String     @default("0")
