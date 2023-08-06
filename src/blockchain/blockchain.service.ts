@@ -36,16 +36,11 @@ export class BlockchainService {
       console.log('connect');
     });
 
-    //const eventSubscription = this.contract.events.OrderCreated({ fromBlock: 'latest' }); // существует
-    // console.log(this.contract.events.OrderCreated.toString()); // существует
-    // console.log(eventSubscription); // выводится
-    // console.log(eventSubscription instanceof EventEmitter) // falles
-    // console.log(Object.getOwnPropertyNames(eventSubscription));
     const orderCreated = this.contract.events.OrderCreated({ fromBlock: 'latest' })._emitter;
-    const orderMatched = this.contract.events.OrderMatched({ fromBlock: 'latest' })._emitter;
     const orderCancelled = this.contract.events.OrderCancelled({ fromBlock: 'latest' })._emitter;
+    const orderMatched = this.contract.events.OrderMatched({ fromBlock: 'latest' })._emitter;
 
-    // Подписка на событие OrderCreated
+    /** Подписка на событие OrderCreated и запись ордера в БД */
     orderCreated.on('data', async (event) => {
         const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
         console.log('Order Created event: \n', event, 'id=', id);
@@ -58,7 +53,6 @@ export class BlockchainService {
           tokenB,
           amountA: `${amountA}`,
           amountB: `${amountB}`,
-          isActive: true,
           orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
         };
 
@@ -72,29 +66,30 @@ export class BlockchainService {
       })
       .on('error', console.error);
 
-    // Подписка на событие OrderMatched
-    orderMatched.on('data', async (event) => {
-      const { id } = event.returnValues;
-      console.log('Order Matched event: \n', event);
-    })
-      .on('error', console.error);
-
-    // Подписка на событие OrderCancelled
+    /** Подписка на событие OrderCancelled и изменение статуса ордера на FILLED в БД */
     orderCancelled.on('data', async (event) => {
       //const { id } = event.returnValues;
-      const id = event.returnValues.id.toString();
+      const id = event.returnValues.id.toString(); // т.к. bigint
       console.log('Order Cancelled event: \n', event)
       try {
         const filledOrder = await this.prisma.order.update({ where: { id }, data: { orderStatus: "FILLED" } });
         console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
       } catch (e) {
-        console.log(`Error trying update order status where id = ${id}`, e)
+        console.log(`Error trying update order status where id = ${id} :`, e)
       }
+    })
+      .on('error', console.error);
+
+    /** Подписка на событие OrderMatched и ...*/
+    // Если весь объем заявки был исполнен (то есть amount равен amountLeftToFill), заявка считается закрытой.
+    orderMatched.on('data', async (event) => {
+      const { id } = event.returnValues;
+      console.log('Order Matched event: \n', event);
     })
       .on('error', console.error);
   }
 
-  /** создание заявки */
+  /** Создание заявки в контракте */
   async createOrder(
     tokenA: string,
     tokenB: string,
@@ -138,6 +133,7 @@ export class BlockchainService {
     );
   }
 
+  /** Отмена заявки в контракте */
   async cancelOrder(orderId: number) {
     const cancelOrder = this.contract.methods.cancelOrder(orderId);
     const gas = await cancelOrder.estimateGas({
@@ -163,6 +159,7 @@ export class BlockchainService {
     );
     return receipt;
   }
+
 
   async matchOrders(
     matchedOrderIds,

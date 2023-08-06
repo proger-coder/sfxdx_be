@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
 import { GetOrdersDto } from './DTO/GetOrdersDTO';
 import { BlockchainService } from './blockchain/blockchain.service';
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class AppService implements OnModuleInit {
@@ -24,12 +25,18 @@ export class AppService implements OnModuleInit {
   }
 
   async getOrders(dto: GetOrdersDto): Promise<Prisma.OrderCreateInput[]> {
-    // Объект условий для выборки данных из базы
     const where: Prisma.OrderWhereInput = {};
+
     if (dto.tokenA) where.tokenA = dto.tokenA;
     if (dto.tokenB) where.tokenB = dto.tokenB;
     if (dto.user) where.creatorAddress = dto.user;
-    if (typeof dto.active !== 'undefined') where.isActive = dto.active;
+
+    // Если параметр active не задан или false, вернуть только активные или частично выполненные ордера
+    if (typeof dto.active === 'undefined' || !dto.active) {
+      where.orderStatus = {
+        in: [OrderStatus.OPEN, OrderStatus.PARTIALLY_FILLED],
+      };
+    }
 
     // Запрос к БД
     const orders = await this.prisma.order.findMany({ where });

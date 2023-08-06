@@ -18,10 +18,12 @@ enum OrderSide {
   UNKNOWN
 }
 
+// This is an enum for order statuses
 enum OrderStatus {
-  ACTIVE
-  PARTIALLY_FILLED
-  FILLED
+  OPEN             // Order is opened, active
+  PARTIALLY_FILLED // Order is partially filled, active
+  FILLED           // Order is fully filled, NOT active
+  CANCELLED        // Order was cancelled, NOT active
 }
 
 model Order {
@@ -32,13 +34,12 @@ model Order {
   amountA          String
   amountB          String
   amountLeftToFill String     @default("0")
-  isActive         Boolean    @default(true)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime?  @updatedAt
   orderType        OrderType  @default(LIMIT)
   orderSide        OrderSide  @default(UNKNOWN)
   filled           Decimal    @default(0)
-  orderStatus      OrderStatus @default(ACTIVE)
+  orderStatus      OrderStatus @default(OPEN)
   executionPrice   Decimal?
   fee              Decimal?
   cancelable       Boolean?   @default(true)
