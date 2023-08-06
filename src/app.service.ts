@@ -13,7 +13,7 @@ export class AppService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    //await this.blockchainService.init();
+    await this.blockchainService.init();
   }
 
   async onApplicationBootstrap() {
@@ -62,7 +62,8 @@ export class AppService implements OnModuleInit {
     const findParameters = { ...baseParameters, ...amountParameters };
 
     // Запрос к БД
-    return this.prisma.order.findMany({
+    return this.prisma.order
+      .findMany({
         where: findParameters,
         select: {
           id: true,

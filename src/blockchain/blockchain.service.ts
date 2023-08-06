@@ -2,10 +2,15 @@ import { Injectable } from '@nestjs/common';
 import Web3 from 'web3';
 import ContractABI from '../../ContractABI.json';
 import { PrismaService } from 'nestjs-prisma';
+import EventEmitter from "events";
 
 const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-const INFURA_WSS = process.env.GOERLI_INFURA_WSS;
+
+const GOERLI_INFURA_WSS = process.env.GOERLI_INFURA_WSS;
+const GOERLI_INFURA_HTTPS = process.env.GOERLI_INFURA_HTTPS;
+const MAINNET_INFURA_WSS = process.env.MAINNET_INFURA_WSS;
+const MAINNET_INFURA_HTTPS = process.env.MAINNET_INFURA_HTTPS;
 
 @Injectable()
 export class BlockchainService {
@@ -13,7 +18,9 @@ export class BlockchainService {
   private readonly contract: any;
 
   constructor(private prisma: PrismaService) {
-    this.web3 = new Web3(new Web3.providers.WebsocketProvider(INFURA_WSS));
+    this.web3 = new Web3(
+      new Web3.providers.WebsocketProvider(GOERLI_INFURA_WSS),
+    );
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
@@ -32,13 +39,22 @@ export class BlockchainService {
       console.log('connect');
     });
 
-    this.web3.provider.on('accountsChanged', () => {
-      console.log('accountsChanged');
-    });
+    //console.log(this.contract.events); // существует
+    console.log(this.contract.events.OrderCreated.toString()); // существует
 
-    this.web3.provider.on('chainChanged', () => {
-      console.log('chainChanged');
-    });
+    const eventSubscription = this.contract.events.OrderCreated({ fromBlock: 'latest' }); // существует
+    console.log(eventSubscription); // выводится
+    console.log(eventSubscription instanceof EventEmitter) // falles
+    console.log(Object.getOwnPropertyNames(eventSubscription));
+
+    eventSubscription._emitter
+      .on('data', function (event) {
+        console.log('event = ', event);
+      })
+      .on('changed', function (event) {
+        // Если какое-то удаленное событие из "логов" блокчейна
+      })
+      .on('error', console.error);
   }
 
   /** создание заявки */
