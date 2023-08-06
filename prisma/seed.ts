@@ -18,7 +18,7 @@ async function main() {
         orderType: 'LIMIT',
         orderSide: 'BUY',
         // filled: 0, // Опционально из-за директивы @default
-        // orderStatus: 'ACTIVE', // Опционально из-за директивы @default
+        // orderStatus: 'OPEN', // Опционально из-за директивы @default
         executionPrice: 4000.0, // Цена исполнения совпадает с amountB / amountA
         fee: 10.0, // Пример комиссии за сделку
         // cancelable: true // Опционально из-за директивы @default
@@ -27,11 +27,16 @@ async function main() {
   });
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// main()
+//   .catch((e) => {
+//     console.error(e);
+//     process.exit(1);
+//   })
+//   .finally(async () => {
+//     await prisma.$disconnect();
+//   });
+
+(async () => {
+  console.log('Пока без seed');
+  prisma.$disconnect().then(() => console.log('disconnected'));
+})();
