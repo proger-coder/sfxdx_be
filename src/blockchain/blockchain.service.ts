@@ -9,6 +9,8 @@ const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const GOERLI_INFURA_WSS = process.env.GOERLI_INFURA_WSS;
 
+// tokenA - адрес токена покупки, tokenB - адрес токена продажи
+
 @Injectable()
 export class BlockchainService {
   private web3: Web3;
@@ -62,6 +64,7 @@ export class BlockchainService {
           tokenB,
           amountA: `${amountA}`,
           amountB: `${amountB}`,
+          amountLeftToFill: `${amountA}`, // Осталось докупить
           orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
           cancelable: !isMarket // возможность отмены - только для активных или частично заполненных лимитных ордеров
         };
@@ -99,12 +102,18 @@ export class BlockchainService {
     /** Подписка на событие OrderMatched и ...*/
     // Если весь объем заявки был исполнен (то есть amount равен amountLeftToFill), заявка считается закрытой.
     orderMatched.on('data', async (event) => {
-      const { id, amountLeftToFill } = event.returnValues;
+      //const { id, amountLeftToFill } = event.returnValues;
+      const id = event.returnValues.id.toString(); // т.к. bigint
+      const amountLeftToFill = event.returnValues.amountLeftToFill.toString(); // тоже Бигинт
+
       console.log('Order Matched event: \n', event);
 
       let orderStatus: OrderStatus;
+      let cancelable = true;
       if (amountLeftToFill === '0') {  // Если ордер полностью исполнен
         orderStatus = "FILLED";
+        cancelable = false;
+
       } else {
         orderStatus = "PARTIALLY_FILLED";
       }
@@ -114,7 +123,8 @@ export class BlockchainService {
           where: { id },
           data: {
             orderStatus,
-            amountLeftToFill: amountLeftToFill
+            amountLeftToFill: amountLeftToFill,
+            cancelable // выполненный полностью ордер становится неотменяемым
           }
         });
         console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
