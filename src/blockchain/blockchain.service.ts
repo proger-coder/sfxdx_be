@@ -4,10 +4,12 @@ import Web3 from 'web3';
 import ContractABI from '../../ContractABI.json';
 import { PrismaService } from 'nestjs-prisma';
 import { OrderType, OrderStatus } from '@prisma/client';
+import * as fs from "fs";
 
 const privateKey = process.env.ETH_GENERRED_PRIVATE_KEY;
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const GOERLI_INFURA_WSS = process.env.GOERLI_INFURA_WSS;
+const contractDeployBlockNumber = Number(process.env.CONTRACT_DEPLOY_BLOCK_NUMBER);
 
 // tokenA - адрес токена покупки, tokenB - адрес токена продажи
 
@@ -15,13 +17,16 @@ const GOERLI_INFURA_WSS = process.env.GOERLI_INFURA_WSS;
 export class BlockchainService {
   private web3: Web3;
   private readonly contract: any;
+  private readonly lastProcessedBlock: number; // Блок, с которого начинать обработку
 
-  constructor(private prisma: PrismaService) {
-    this.web3 = new Web3(
-      new Web3.providers.WebsocketProvider(GOERLI_INFURA_WSS),
-    );
-    this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
-  }
+    constructor(private prisma: PrismaService) {
+      this.web3 = new Web3(
+        new Web3.providers.WebsocketProvider(GOERLI_INFURA_WSS),
+      );
+      this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
+      //Грузим блок для начала обработки - либо из файла, либо из хардкода
+      this.lastProcessedBlock = this.getLastProcessedBlock() || contractDeployBlockNumber;
+    }
 
   async handleOrderCreated(event) {
     const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
@@ -44,6 +49,7 @@ export class BlockchainService {
         data: orderData,
       });
       console.log('Order saved to database:', createdOrder);
+      this.setLastProcessedBlock(event.blockNumber); // устанавливаем последний обработанный блок
     } catch (error) {
       console.error('Error saving order to database:', error);
     }
@@ -62,6 +68,7 @@ export class BlockchainService {
         }
       });
       console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus']);
+      this.setLastProcessedBlock(event.blockNumber); // устанавливаем последний обработанный блок
     } catch (e) {
       console.log(`Error trying update order status where id = ${id} :`, e);
     }
@@ -91,6 +98,7 @@ export class BlockchainService {
         }
       });
       console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
+      this.setLastProcessedBlock(event.blockNumber); // устанавливаем последний обработанный блок
     } catch (e) {
       console.log(`Error updating order status where id = ${id} :`, e);
     }
@@ -125,6 +133,20 @@ export class BlockchainService {
     }
   }
 
+  setLastProcessedBlock(blockNumber) {
+    fs.writeFileSync('lastProcessedBlock.txt', blockNumber.toString());
+  }
+
+  getLastProcessedBlock(){
+    if (fs.existsSync('lastProcessedBlock.txt')) {
+    const data = fs.readFileSync('lastProcessedBlock.txt', 'utf8');
+    return parseInt(data);
+    } else {
+      // Если файла нет - вернуть номер блока развертывания контракта
+      return contractDeployBlockNumber || 7722460;
+    }
+  }
+
   async init() {
     await this.setAccount(privateKey);
     console.log('account set');
@@ -133,11 +155,9 @@ export class BlockchainService {
       console.log('connect');
     });
 
-    // Загрузите последний известный блок из хранилища данных (если он там есть)
-    // или используйте номер блока деплоя контракта.
-    //const lastKnownBlock = await this.getLastKnownBlockFromDB() || <contract_deploy_block_number>;
-    //await this.processPastEvents(lastKnownBlock);
-    await this.processPastEvents(9473177)
+    // Грузим последний известный блок из хранилища данных (если он там есть)
+    await this.processPastEvents(this.lastProcessedBlock);
+    //await this.processPastEvents(9473177)
 
     /** подписки на свежие события */
     const orderCreated = this.contract.events.OrderCreated({ fromBlock: 'latest' })._emitter;
