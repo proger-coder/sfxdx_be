@@ -11,6 +11,7 @@ services:
       DATABASE_URL: "postgresql://prisma:prismapassword@db:5432/mydb?schema=public"
     depends_on:
       - db
+    command: /bin/sh -c "npx prisma migrate deploy && npm run start"
 
   db:
     image: postgres:latest
