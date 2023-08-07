@@ -8,7 +8,10 @@ import { CreateOrderDto } from './DTO/CreateOrderDTO';
 import { MatchOrdersDto } from './DTO/MatchOrdersDTO';
 import { promises as fs } from 'fs';
 import { marked } from 'marked';
+import { ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiTags } from '@nestjs/swagger';
+import { CancelOrderDto } from "./DTO/CancelOrderDTO";
 
+@ApiTags('App')
 @Controller()
 export class AppController {
   constructor(
@@ -17,6 +20,8 @@ export class AppController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: 'Get README content' })
+  @ApiResponse({ status: 200, description: 'Returns the rendered markdown from README.md' })
   async getReadme(): Promise<string> {
     const readmeContent = await fs.readFile('README.md', 'utf-8');
     return marked(readmeContent);
@@ -37,6 +42,8 @@ export class AppController {
    */
 
   @Get('getOrders')
+  @ApiOperation({ summary: 'Retrieve a list of orders' })
+  @ApiResponse({ status: 200, description: 'Returns a list of orders' })
   getOrders(
     @Query() getOrdersDto: GetOrdersDto, // Использование DTO
   ): Promise<Prisma.OrderCreateInput[]> {
@@ -59,6 +66,8 @@ export class AppController {
    */
 
   @Get('getMatchingOrders')
+  @ApiOperation({ summary: 'Retrieve matching orders based on criteria' })
+  @ApiResponse({ status: 200, description: 'Returns a list of matching order IDs' })
   getMatchingOrders(
     @Query() getMatchingOrdersDto: GetMatchingOrdersDto, // Использование DTO
   ): Promise<string[]> {
@@ -70,6 +79,9 @@ export class AppController {
    * 5 токенов перечислены в .env
    * */
   @Post('createOrder')
+  @ApiOperation({ summary: 'Create a new order' })
+  @ApiResponse({ status: 201, description: 'Order created successfully' })
+  @ApiBody({ type: CreateOrderDto })
   async createOrder(@Body() createOrderDto: CreateOrderDto) {
     const { tokenA, tokenB, amountA, amountB } = createOrderDto;
     return await this.blockchainService.createOrder(
@@ -81,6 +93,9 @@ export class AppController {
   }
 
   @Post('matchOrders')
+  @ApiOperation({ summary: 'Match given orders' })
+  @ApiResponse({ status: 200, description: 'Orders matched successfully' })
+  @ApiBody({ type: MatchOrdersDto })
   async matchOrders(@Body() matchOrders: MatchOrdersDto) {
     const { matchedOrderIds, tokenA, tokenB, amountA, amountB, isMarket } =
       matchOrders;
@@ -95,8 +110,10 @@ export class AppController {
   }
 
   @Post('cancelOrder')
-  async cancelOrder(@Body() body) {
-    const { id } = body; //string
-    return await this.blockchainService.cancelOrder(id);
+  @ApiOperation({ summary: 'Cancel a specific order' })
+  @ApiResponse({ status: 200, description: 'Order canceled successfully' })
+  @ApiBody({ type: CancelOrderDto })
+  async cancelOrder(@Body() cancelOrderDto: CancelOrderDto) {
+    return await this.blockchainService.cancelOrder(cancelOrderDto.id);
   }
 }
