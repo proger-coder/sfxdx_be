@@ -23,13 +23,77 @@ export class BlockchainService {
     this.contract = new this.web3.eth.Contract(ContractABI, CONTRACT_ADDRESS);
   }
 
-  // Преобразование 'BigInt' в 'string'
-  jsonify(receipt){
-    return JSON.parse(
-      JSON.stringify(receipt, (_, v) =>
-        typeof v === 'bigint' ? v.toString() : v,
-      ),
-    );
+  async handleOrderCreated(event) {
+    const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
+    console.log('Order Created event with id=', id);
+
+    try {
+      const orderData = {
+        id: `${id}`,
+        creatorAddress: user,
+        tokenA,
+        tokenB,
+        amountA: `${amountA}`,
+        amountB: `${amountB}`,
+        amountLeftToFill: `${amountA}`, // Осталось докупить
+        orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
+        cancelable: !isMarket // возможность отмены - только для активных или частично заполненных лимитных ордеров
+      };
+
+      const createdOrder = await this.prisma.order.create({
+        data: orderData,
+      });
+      console.log('Order saved to database:', createdOrder);
+    } catch (error) {
+      console.error('Error saving order to database:', error);
+    }
+  }
+
+  async handleOrderCancelled(event) {
+    const id = event.returnValues.id.toString();
+    console.log('Order Cancelled event with id=', id);
+
+    try {
+      const filledOrder = await this.prisma.order.update({
+        where: { id },
+        data: {
+          orderStatus: "CANCELLED",
+          cancelable: false // отменённый ордер становится неотменяемым
+        }
+      });
+      console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus']);
+    } catch (e) {
+      console.log(`Error trying update order status where id = ${id} :`, e);
+    }
+  }
+
+  async handleOrderMatched(event) {
+    const id = event.returnValues.id.toString();
+    const amountLeftToFill = event.returnValues.amountLeftToFill.toString();
+    console.log('Order Matched event with id=', id);
+
+    let orderStatus: OrderStatus;
+    let cancelable = true;
+    if (amountLeftToFill === '0') {  // Если ордер полностью исполнен
+      orderStatus = "FILLED";
+      cancelable = false;
+    } else {
+      orderStatus = "PARTIALLY_FILLED";
+    }
+
+    try {
+      const updatedOrder = await this.prisma.order.update({
+        where: { id },
+        data: {
+          orderStatus,
+          amountLeftToFill: amountLeftToFill,
+          cancelable // выполненный полностью ордер становится неотменяемым
+        }
+      });
+      console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
+    } catch (e) {
+      console.log(`Error updating order status where id = ${id} :`, e);
+    }
   }
 
   // Подключаемся к аккаунту
@@ -37,6 +101,28 @@ export class BlockchainService {
     const account = this.web3.eth.accounts.privateKeyToAccount(privateKey);
     this.web3.eth.accounts.wallet.add(account);
     this.web3.eth.defaultAccount = account.address;
+  }
+
+  /** Обработка событий с некоего момента (блока) */
+  async processPastEvents(fromBlock: number) {
+    const pastCreatedEvents = await this.contract.getPastEvents('OrderCreated', { fromBlock });
+
+    for (let event of pastCreatedEvents) {
+      await this.handleOrderCreated(event);
+      console.log('Handling event from past: OrderCreated , id=', event.returnValues.id);
+    }
+
+    const pastCancelledEvents = await this.contract.getPastEvents('OrderCancelled', { fromBlock });
+    for (let event of pastCancelledEvents) {
+      await this.handleOrderCancelled(event);
+      console.log('Handling event from past: OrderCancelled , id=', event.returnValues.id);
+    }
+
+    const pastMatchedEvents = await this.contract.getPastEvents('OrderMatched', { fromBlock });
+    for (let event of pastMatchedEvents) {
+      await this.handleOrderMatched(event);
+      console.log('Handling event from past: OrderMatched , id=', event.returnValues.id);
+    }
   }
 
   async init() {
@@ -47,92 +133,26 @@ export class BlockchainService {
       console.log('connect');
     });
 
+    // Загрузите последний известный блок из хранилища данных (если он там есть)
+    // или используйте номер блока деплоя контракта.
+    //const lastKnownBlock = await this.getLastKnownBlockFromDB() || <contract_deploy_block_number>;
+    //await this.processPastEvents(lastKnownBlock);
+    await this.processPastEvents(9473177)
+
+    /** подписки на свежие события */
     const orderCreated = this.contract.events.OrderCreated({ fromBlock: 'latest' })._emitter;
     const orderCancelled = this.contract.events.OrderCancelled({ fromBlock: 'latest' })._emitter;
     const orderMatched = this.contract.events.OrderMatched({ fromBlock: 'latest' })._emitter;
 
     /** Подписка на событие OrderCreated и запись ордера в БД */
-    orderCreated.on('data', async (event) => {
-        const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
-        console.log('Order Created event: \n', event, 'id=', id);
-
-      try {
-        const orderData = {
-          id: `${id}`,
-          creatorAddress: user,
-          tokenA,
-          tokenB,
-          amountA: `${amountA}`,
-          amountB: `${amountB}`,
-          amountLeftToFill: `${amountA}`, // Осталось докупить
-          orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
-          cancelable: !isMarket // возможность отмены - только для активных или частично заполненных лимитных ордеров
-        };
-
-        const createdOrder = await this.prisma.order.create({
-          data: orderData,
-        });
-        console.log('Order saved to database:', createdOrder);
-      } catch (error) {
-          console.error('Error saving order to database:', error);
-        }
-      })
-      .on('error', console.error);
+    orderCreated.on('data', this.handleOrderCreated.bind(this)).on('error', console.error);
 
     /** Подписка на событие OrderCancelled и изменение статуса ордера на FILLED в БД */
-    orderCancelled.on('data', async (event) => {
-      //const { id } = event.returnValues;
-      const id = event.returnValues.id.toString(); // т.к. bigint
-      console.log('Order Cancelled event: \n', event)
-      try {
-        const filledOrder = await this.prisma.order.update({
-          where: { id },
-          data: {
-            orderStatus: "CANCELLED",
-            cancelable: false // отменённый ордер становится неотменяемым
-          }
-        });
-        console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
-      } catch (e) {
-        console.log(`Error trying update order status where id = ${id} :`, e)
-      }
-    })
-      .on('error', console.error);
+    orderCancelled.on('data', this.handleOrderCancelled.bind(this)).on('error', console.error);
 
-    /** Подписка на событие OrderMatched и ...*/
-    // Если весь объем заявки был исполнен (то есть amount равен amountLeftToFill), заявка считается закрытой.
-    orderMatched.on('data', async (event) => {
-      //const { id, amountLeftToFill } = event.returnValues;
-      const id = event.returnValues.id.toString(); // т.к. bigint
-      const amountLeftToFill = event.returnValues.amountLeftToFill.toString(); // тоже Бигинт
+    /** Подписка на событие OrderMatched. Если весь объем заявки был исполнен, заявка считается закрытой.*/
+    orderMatched.on('data', this.handleOrderMatched.bind(this)).on('error', console.error);
 
-      console.log('Order Matched event: \n', event);
-
-      let orderStatus: OrderStatus;
-      let cancelable = true;
-      if (amountLeftToFill === '0') {  // Если ордер полностью исполнен
-        orderStatus = "FILLED";
-        cancelable = false;
-
-      } else {
-        orderStatus = "PARTIALLY_FILLED";
-      }
-
-      try {
-        const updatedOrder = await this.prisma.order.update({
-          where: { id },
-          data: {
-            orderStatus,
-            amountLeftToFill: amountLeftToFill,
-            cancelable // выполненный полностью ордер становится неотменяемым
-          }
-        });
-        console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
-      } catch (e) {
-        console.log(`Error updating order status where id = ${id} :`, e);
-      }
-    })
-      .on('error', console.error);
   }
 
   /**
@@ -202,4 +222,92 @@ export class BlockchainService {
   async cancelOrder(orderId: string) {
     return await this.executeContractMethod('cancelOrder', orderId);
   }
+
+  // Преобразование 'BigInt' в 'string'
+  jsonify(receipt){
+    return JSON.parse(
+      JSON.stringify(receipt, (_, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
+      ),
+    );
+  }
 }
+
+// orderCreated.on('data', async (event) => {
+//     const { id, user, tokenA, tokenB, amountA, amountB, isMarket } = event.returnValues;
+//     console.log('Order Created event: \n', event, 'id=', id);
+//
+//   try {
+//     const orderData = {
+//       id: `${id}`,
+//       creatorAddress: user,
+//       tokenA,
+//       tokenB,
+//       amountA: `${amountA}`,
+//       amountB: `${amountB}`,
+//       amountLeftToFill: `${amountA}`, // Осталось докупить
+//       orderType: isMarket ? ("MARKET" as OrderType) : ("LIMIT" as OrderType),
+//       cancelable: !isMarket // возможность отмены - только для активных или частично заполненных лимитных ордеров
+//     };
+//
+//     const createdOrder = await this.prisma.order.create({
+//       data: orderData,
+//     });
+//     console.log('Order saved to database:', createdOrder);
+//   } catch (error) {
+//       console.error('Error saving order to database:', error);
+//     }
+//   })
+//   .on('error', console.error);
+
+// orderCancelled.on('data', async (event) => {
+//   //const { id } = event.returnValues;
+//   const id = event.returnValues.id.toString(); // т.к. bigint
+//   console.log('Order Cancelled event: \n', event)
+//   try {
+//     const filledOrder = await this.prisma.order.update({
+//       where: { id },
+//       data: {
+//         orderStatus: "CANCELLED",
+//         cancelable: false // отменённый ордер становится неотменяемым
+//       }
+//     });
+//     console.log(`Result of cancelling order ${id} = `, filledOrder['orderStatus'])
+//   } catch (e) {
+//     console.log(`Error trying update order status where id = ${id} :`, e)
+//   }
+// })
+//   .on('error', console.error);
+
+// orderMatched.on('data', async (event) => {
+//   //const { id, amountLeftToFill } = event.returnValues;
+//   const id = event.returnValues.id.toString(); // т.к. bigint
+//   const amountLeftToFill = event.returnValues.amountLeftToFill.toString(); // тоже Бигинт
+//
+//   console.log('Order Matched event: \n', event);
+//
+//   let orderStatus: OrderStatus;
+//   let cancelable = true;
+//   if (amountLeftToFill === '0') {  // Если ордер полностью исполнен
+//     orderStatus = "FILLED";
+//     cancelable = false;
+//
+//   } else {
+//     orderStatus = "PARTIALLY_FILLED";
+//   }
+//
+//   try {
+//     const updatedOrder = await this.prisma.order.update({
+//       where: { id },
+//       data: {
+//         orderStatus,
+//         amountLeftToFill: amountLeftToFill,
+//         cancelable // выполненный полностью ордер становится неотменяемым
+//       }
+//     });
+//     console.log(`Order ${id} updated with status:`, updatedOrder.orderStatus);
+//   } catch (e) {
+//     console.log(`Error updating order status where id = ${id} :`, e);
+//   }
+// })
+//   .on('error', console.error);
