@@ -6,6 +6,8 @@ import { GetMatchingOrdersDto } from './DTO/GetMatchingOrdersDTO';
 import { BlockchainService } from './blockchain/blockchain.service';
 import { CreateOrderDto } from './DTO/CreateOrderDTO';
 import { MatchOrdersDto } from './DTO/MatchOrdersDTO';
+import { promises as fs } from 'fs';
+import { marked } from 'marked';
 
 @Controller()
 export class AppController {
@@ -15,8 +17,10 @@ export class AppController {
   ) {}
 
   @Get()
-  getMain(): string {
-    return this.appService.getMain();
+  async getReadme(): Promise<string> {
+    const readmeContent = await fs.readFile('README.md', 'utf-8');
+    return marked(readmeContent);
+    //return await fs.readFile('README.md', 'utf-8');
   }
 
   /**

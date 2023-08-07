@@ -17,10 +17,6 @@ export class AppService implements OnModuleInit {
     await this.blockchainService.init();
   }
 
-  getMain(): string {
-    return 'Главная страница!';
-  }
-
   async getOrders(dto: GetOrdersDto): Promise<Prisma.OrderCreateInput[]> {
     const where: Prisma.OrderWhereInput = {};
 
